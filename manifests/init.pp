@@ -1,0 +1,60 @@
+class mongodb (
+  $package_ensure = 'present',
+  $service_ensure = 'running',
+  $service_enable = true,
+  $config = {},
+) {
+  include mongodb::install, mongodb::config, mongodb::service
+}
+
+class mongodb::install {
+  file { '/etc/yum.repos.d/mongodb-org-3.0.repo':
+    ensure => present,
+    source => 'puppet:///modules/mongodb/mongodb-org-3.0.repo',
+    owner => 'root',
+    group => 'root',
+  }
+  ->
+  package { 'mongodb-org':
+    ensure => $mongodb::package_ensure
+  }
+}
+
+class mongodb::config {
+  $default_config = {
+    systemLog => {
+      destination => 'file',
+      path => '/var/log/mongodb/mongod.log',
+      logAppend => true,
+    },
+    processManagement => {
+      fork => true,
+      pidFilePath => '/var/run/mongodb/mongod.pid',
+    },
+    storage => {
+      dbPath => '/var/lib/mongo'
+    }
+  }
+
+  $config = deep_merge(
+    $default_config,
+    $mongodb::config,
+    hiera_hash('mongodb::config', {})
+  )
+
+  file { '/etc/mongod.conf':
+    ensure => file,
+    content => inline_template("<%= @config.to_yaml %>"),
+    notify => Class['mongodb::service'],
+    owner => 'root',
+    group => 'root',
+  }
+}
+
+class mongodb::service {
+  service { 'mongod':
+    require => [Class['mongodb::config'], Class['mongodb::install']],
+    ensure => $mongodb::service_ensure,
+    enable => $mongodb::service_enable,
+  }
+}
