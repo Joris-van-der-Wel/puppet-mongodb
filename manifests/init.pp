@@ -39,7 +39,7 @@ class mongodb::config {
   $config = deep_merge(
     $default_config,
     $mongodb::config,
-    hiera_hash('mongodb::config', {})
+    hiera_hash('mongodb::extra_config', {})
   )
 
   file { '/etc/mongod.conf':
