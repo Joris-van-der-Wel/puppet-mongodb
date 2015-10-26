@@ -1,6 +1,6 @@
 {
   "name": "jorisw-mongodb",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Joris van der Wel <joris@jorisvanderwel.com>",
   "summary": "Configures the mongodb 3 service. Installed from repo.mongodb.org. Any config setting can be configured using your puppet manifest and/or using hiera.",
   "license": "MIT",
