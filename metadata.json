@@ -1,13 +1,13 @@
 {
   "name": "jorisw-mongodb",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "author": "Joris van der Wel <joris@jorisvanderwel.com>",
   "summary": "Configures the mongodb 3 service. Installed from repo.mongodb.org. Any config setting can be configured using your puppet manifest and/or using hiera.",
+  "description": "Configures the mongodb 3 service. Installed from repo.mongodb.org. Any config setting can be configured using your puppet manifest and/or using hiera.",
   "license": "MIT",
   "source": "git://github.com/Joris-van-der-Wel/puppet-mongodb.git",
   "project_page": "https://github.com/Joris-van-der-Wel/puppet-mongodb",
   "issues_url": "https://github.com/Joris-van-der-Wel/puppet-mongodb/issues",
-  "description": "Configures the mongodb 3 service. Installed from repo.mongodb.org. Any config setting can be configured using your puppet manifest and/or using hiera.",
   "operatingsystem_support": [
     {
       "operatingsystem": "CentOS",
