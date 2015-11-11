@@ -16,6 +16,16 @@ class mongodb::install {
   }
   ->
   package { 'mongodb-org':
+    # do not install the meta package. otherwise puppet+yum is unable to downgrade the version
+    ensure => absent,
+  }
+  ->
+  package { [
+    'mongodb-org-mongos',
+    'mongodb-org-server',
+    'mongodb-org-shell',
+    'mongodb-org-tools'
+  ]:
     ensure => $mongodb::package_ensure
   }
 }
