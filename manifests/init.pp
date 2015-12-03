@@ -3,6 +3,7 @@ class mongodb (
   $service_ensure = 'running',
   $service_enable = true,
   $config = {},
+  $disable_huge_pages = false,
 ) {
   include mongodb::install, mongodb::config, mongodb::service
 }
@@ -58,6 +59,18 @@ class mongodb::config {
     notify => Class['mongodb::service'],
     owner => 'root',
     group => 'root',
+  }
+
+  if $mongodb::disable_huge_pages {
+    exec { '/sys/kernel/mm/transparent_hugepage/enabled':
+      command => '/bin/echo never > /sys/kernel/mm/transparent_hugepage/enabled',
+      unless => "/bin/grep -E '\[never\]|^never$' /sys/kernel/mm/transparent_hugepage/enabled",
+    }
+
+    exec { '/sys/kernel/mm/transparent_hugepage/defrag':
+      command => '/bin/echo never > /sys/kernel/mm/transparent_hugepage/defrag',
+      unless => "/bin/grep -E '\[never\]|^never$' /sys/kernel/mm/transparent_hugepage/defrag",
+    }
   }
 }
 
