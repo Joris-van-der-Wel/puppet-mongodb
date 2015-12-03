@@ -56,21 +56,36 @@ class mongodb::config {
   file { '/etc/mongod.conf':
     ensure => file,
     content => inline_template("<%= @config.to_yaml %>"),
-    notify => Class['mongodb::service'],
     owner => 'root',
     group => 'root',
   }
+  ~> Service['mongod']
 
   if $mongodb::disable_huge_pages {
     exec { '/sys/kernel/mm/transparent_hugepage/enabled':
       command => '/bin/echo never > /sys/kernel/mm/transparent_hugepage/enabled',
-      unless => "/bin/grep -E '\[never\]|^never$' /sys/kernel/mm/transparent_hugepage/enabled",
+      unless => "/bin/grep -E '\\[never\\]|^never$' /sys/kernel/mm/transparent_hugepage/enabled",
     }
+    ~> Service['mongod']
 
     exec { '/sys/kernel/mm/transparent_hugepage/defrag':
       command => '/bin/echo never > /sys/kernel/mm/transparent_hugepage/defrag',
-      unless => "/bin/grep -E '\[never\]|^never$' /sys/kernel/mm/transparent_hugepage/defrag",
+      unless => "/bin/grep -E '\\[never\\]|^never$' /sys/kernel/mm/transparent_hugepage/defrag",
     }
+    ~> Service['mongod']
+  }
+
+  if $os['family'] == 'RedHat' {
+    $limits = @(CONF)
+      mongod soft nproc unlimited
+      mongod hard nproc unlimited
+      | CONF
+
+    file { '/etc/security/limits.d/mongod.conf':
+      ensure => 'present',
+      content => $limits,
+    }
+    ~> Service['mongod']
   }
 }
 
