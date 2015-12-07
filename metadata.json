@@ -1,9 +1,9 @@
 {
   "name": "jorisw-mongodb",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "author": "Joris van der Wel <joris@jorisvanderwel.com>",
-  "summary": "Configures the mongodb 3 service. Installed from repo.mongodb.org. Any config setting can be configured using your puppet manifest and/or using hiera.",
-  "description": "Configures the mongodb 3 service. Installed from repo.mongodb.org. Any config setting can be configured using your puppet manifest and/or using hiera.",
+  "summary": "Configures the MongoDB 3 / Percona Server / TokuMX service. Any config setting can be configured using your puppet manifest and/or using hiera.",
+  "description": "CConfigures the MongoDB 3 / Percona Server / TokuMX service. Any config setting can be configured using your puppet manifest and/or using hiera.",
   "license": "MIT",
   "source": "git://github.com/Joris-van-der-Wel/puppet-mongodb.git",
   "project_page": "https://github.com/Joris-van-der-Wel/puppet-mongodb",
