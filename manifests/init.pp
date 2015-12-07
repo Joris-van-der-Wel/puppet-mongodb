@@ -9,12 +9,28 @@ class mongodb (
 
 ) inherits mongodb::params {
 
-  include mongodb::install_mongo, mongodb::install_percona
-  include mongodb::config, mongodb::service
+  include mongodb::install_mongo, mongodb::install_percona, mongodb::install_tokumx2
+  include mongodb::service
 
   if $mongo_fork != 'none' and
-     $mongo_fork != 'percona' {
+     $mongo_fork != 'percona' and
+     $mongo_fork != 'tokumx2' {
     error('mongo_fork must either be "none" or "percona"')
+  }
+
+  if $disable_huge_pages {
+    include mongodb::config_disable_huge_pages
+  }
+
+  if $configure_limits {
+    include mongodb::config_configure_limits
+  }
+
+  if $mongo_fork == 'tokumx2' {
+    include mongodb::config_tokumx2
+  }
+  else {
+    include mongodb::config_mongodb
   }
 }
 
@@ -35,6 +51,10 @@ class mongodb::params {
 }
 
 class mongodb::install_mongo {
+  $other_install_classes = [
+    Class['mongodb::install_percona'],
+    Class['mongodb::install_tokumx2'],
+  ]
 
   file { '/etc/yum.repos.d/mongodb-org-3.0.repo':
     ensure => $mongodb::mongo_fork ? {
@@ -63,13 +83,18 @@ class mongodb::install_mongo {
     },
     # make sure these have been removed first:
     require => $mongodb::mongo_fork ? {
-      'none' => Class['mongodb::install_percona'],
+      'none' => $other_install_classes,
       default => [],
     },
   }
 }
 
 class mongodb::install_percona {
+  $other_install_classes = [
+    Class['mongodb::install_mongo'],
+    Class['mongodb::install_tokumx2'],
+  ]
+
   file { '/root/percona-release-0.1-3.noarch.rpm':
     ensure => $mongodb::mongo_fork ? {
       'percona' => 'file',
@@ -107,7 +132,7 @@ class mongodb::install_percona {
     },
     # make sure these have been removed first:
     require => $mongodb::mongo_fork ? {
-      'percona' => Class['mongodb::install_mongo'],
+      'percona' => $other_install_classes,
       default => [],
     },
   }
@@ -132,7 +157,7 @@ class mongodb::install_percona {
         command => '/bin/systemctl enable /usr/lib/systemd/system/mongod.service',
         unless => '/bin/systemctl is-enabled mongod.service',
       }
-      ~> Service['mongod']
+      ~> Class['mongodb::service']
     }
     else {
       exec { 'disable mongod systemd service file':
@@ -147,7 +172,91 @@ class mongodb::install_percona {
   }
 }
 
-class mongodb::config {
+class mongodb::install_tokumx2 {
+  $other_install_classes = [
+    Class['mongodb::install_mongo'],
+    Class['mongodb::install_percona'],
+  ]
+
+  if $mongodb::mongo_fork == 'tokumx2' {
+    package { 'tokumx-common':
+      ensure   => 'present',
+      provider => 'rpm',
+      source   => 'https://s3.amazonaws.com/tokumx-2.0.1/el6/tokumx-common-2.0.1-1.el6.x86_64.rpm',
+      require  => $mongodb::mongo_fork ? {
+        'tokumx2' => $other_install_classes,
+        default => [],
+      }
+    }
+
+    Package['tokumx-common']
+    ->
+    package { 'tokumx':
+      ensure   => 'present',
+      require  => Package['tokumx-common'],
+      provider => 'rpm',
+      source   => 'https://s3.amazonaws.com/tokumx-2.0.1/el6/tokumx-2.0.1-1.el6.x86_64.rpm',
+    }
+
+    Package['tokumx-common']
+    ->
+    package { 'tokumx-server':
+      ensure   => 'present',
+      require  => Package['tokumx-common'],
+      provider => 'rpm',
+      source   => 'https://s3.amazonaws.com/tokumx-2.0.1/el6/tokumx-server-2.0.1-1.el6.x86_64.rpm',
+    }
+  }
+  else {
+    package { 'tokumx-common':
+      ensure   => 'absent',
+      provider => 'rpm',
+    }
+
+    package { 'tokumx':
+      ensure   => 'absent',
+      provider => 'rpm',
+    }
+    ->
+    Package['tokumx-common']
+
+    package { 'tokumx-server':
+      ensure   => 'absent',
+      provider => 'rpm',
+    }
+    ->
+    Package['tokumx-common']
+  }
+}
+
+class mongodb::config_disable_huge_pages {
+  exec { '/sys/kernel/mm/transparent_hugepage/enabled':
+    command => '/bin/echo never > /sys/kernel/mm/transparent_hugepage/enabled',
+    unless => "/bin/grep -E '\\[never\\]|^never$' /sys/kernel/mm/transparent_hugepage/enabled",
+  }
+  ~> Class['mongodb::service']
+
+  exec { '/sys/kernel/mm/transparent_hugepage/defrag':
+    command => '/bin/echo never > /sys/kernel/mm/transparent_hugepage/defrag',
+    unless => "/bin/grep -E '\\[never\\]|^never$' /sys/kernel/mm/transparent_hugepage/defrag",
+  }
+  ~> Class['mongodb::service']
+}
+
+class mongodb::config_configure_limits {
+  $limits = @(CONF)
+    mongod soft nproc unlimited
+    mongod hard nproc unlimited
+    | CONF
+
+  file { '/etc/security/limits.d/mongod.conf':
+    ensure => 'present',
+    content => $limits,
+  }
+  ~> Class['mongodb::service']
+}
+
+class mongodb::config_mongodb {
   $default_fork = $mongodb::mongo_fork ? {
     'percona' => false,
     default => true,
@@ -173,17 +282,11 @@ class mongodb::config {
     hiera_hash('mongodb::extra_config', {})
   )
 
-  file { '/var/log/mongodb':
-    ensure => directory,
-    owner => 'mongod',
-    group => 'mongod',
-    require => [
-      Class['mongodb::install_mongo'],
-      Class['mongodb::install_percona']
-    ]
-  }
-
-  file { '/var/run/mongodb':
+  file { [
+    '/var/log/mongodb',
+    '/var/lib/mongodb',
+    '/var/run/mongodb',
+  ]:
     ensure => directory,
     owner => 'mongod',
     group => 'mongod',
@@ -195,44 +298,56 @@ class mongodb::config {
 
   file { '/etc/mongod.conf':
     ensure => file,
-    content => inline_template("<%= @config.to_yaml %>"),
+    content => inline_template('<%= @config.to_yaml %>'),
     owner => 'root',
     group => 'root',
   }
-  ~> Service['mongod']
+  ~> Class['mongodb::service']
+}
 
-  if $mongodb::disable_huge_pages {
-    exec { '/sys/kernel/mm/transparent_hugepage/enabled':
-      command => '/bin/echo never > /sys/kernel/mm/transparent_hugepage/enabled',
-      unless => "/bin/grep -E '\\[never\\]|^never$' /sys/kernel/mm/transparent_hugepage/enabled",
-    }
-    ~> Service['mongod']
-
-    exec { '/sys/kernel/mm/transparent_hugepage/defrag':
-      command => '/bin/echo never > /sys/kernel/mm/transparent_hugepage/defrag',
-      unless => "/bin/grep -E '\\[never\\]|^never$' /sys/kernel/mm/transparent_hugepage/defrag",
-    }
-    ~> Service['mongod']
+class mongodb::config_tokumx2 {
+  $default_config = {
+    dbpath => '/var/lib/mongo',
+    logpath => '/var/log/mongo/tokumx.log',
+    logappend => true,
+    fork => true,
+    pidfilepath => '/var/run/mongo/tokumx.pid',
+    pluginsDir => '/usr/lib64/tokumx/plugins',
   }
 
-  if $mongodb::configure_limits {
-    $limits = @(CONF)
-      mongod soft nproc unlimited
-      mongod hard nproc unlimited
-      | CONF
-
-    file { '/etc/security/limits.d/mongod.conf':
-      ensure => 'present',
-      content => $limits,
-    }
-    ~> Service['mongod']
+  file { [
+    '/var/lib/mongo',
+    '/var/log/mongo',
+    '/var/run/mongo',
+  ]:
+    ensure => directory,
+    owner => 'tokumx',
+    group => 'tokumx',
+    require => [
+      Class['mongodb::install_tokumx2'],
+    ]
   }
+
+  $config = deep_merge(
+    $default_config,
+    $mongodb::config,
+    hiera_hash('mongodb::extra_config', {})
+  )
+
+  file { '/etc/tokumx.conf':
+    ensure => file,
+    content => inline_template('<%= tmp = "";@config.each_pair { |key, value| tmp += "#{key} = #{value}\n"};tmp %>'),
+    owner => 'root',
+    group => 'root',
+  }
+  ~> Class['mongodb::service']
 }
 
 class mongodb::service {
   if $os['family'] == 'RedHat' {
     $service_provider = $mongodb::mongo_fork ? {
       'percona' => 'systemd',
+      'tokumx2' => 'init',
       default => 'redhat',
     }
   }
@@ -240,11 +355,20 @@ class mongodb::service {
     $service_provider = undef
   }
 
-  service { 'mongod':
+  $service_name = $mongodb::mongo_fork ? {
+    'tokumx2' => 'tokumx',
+    default => 'mongod',
+  }
+
+  service { $service_name:
     require => [
-      Class['mongodb::config'],
+      Class[$mongodb::mongo_fork ? {
+        'tokumx2' => 'mongodb::config_tokumx2',
+        default => 'mongodb::config_mongodb',
+      }],
       Class['mongodb::install_mongo'],
-      Class['mongodb::install_percona']
+      Class['mongodb::install_percona'],
+      Class['mongodb::install_tokumx2'],
     ],
     provider => $service_provider,
     ensure => $mongodb::service_ensure,
