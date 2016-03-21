@@ -347,7 +347,7 @@ class mongodb::service {
   if $os['family'] == 'RedHat' {
     $service_provider = $mongodb::mongo_fork ? {
       'percona' => 'systemd',
-      'tokumx2' => 'init',
+      'tokumx2' => 'redhat',
       default => 'redhat',
     }
   }
