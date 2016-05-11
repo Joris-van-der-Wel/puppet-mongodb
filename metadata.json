@@ -1,6 +1,6 @@
 {
   "name": "jorisw-mongodb",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "author": "Joris van der Wel <joris@jorisvanderwel.com>",
   "summary": "Configures the MongoDB 3 / Percona Server / TokuMX service. Any config setting can be configured using your puppet manifest and/or using hiera.",
   "description": "CConfigures the MongoDB 3 / Percona Server / TokuMX service. Any config setting can be configured using your puppet manifest and/or using hiera.",
