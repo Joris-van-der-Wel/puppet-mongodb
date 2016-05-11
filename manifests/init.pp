@@ -23,7 +23,13 @@ class mongodb (
   }
 
   if $configure_limits {
-    include mongodb::config_configure_limits
+    if $mongo_fork == 'tokumx2' {
+      include mongodb::config_configure_limits_tokumx2
+    }
+    else {
+      include mongodb::config_configure_limits_mongo
+    }
+
   }
 
   if $mongo_fork == 'tokumx2' {
@@ -243,7 +249,22 @@ class mongodb::config_disable_huge_pages {
   ~> Class['mongodb::service']
 }
 
-class mongodb::config_configure_limits {
+class mongodb::config_configure_limits_tokumx2 {
+  $limits = @(CONF)
+    tokumx soft nproc -1
+    tokumx hard nproc -1
+    tokumx soft nofile -1
+    tokumx hard nofile 65535
+    | CONF
+
+  file { '/etc/security/limits.d/tokumx.conf':
+    ensure => 'present',
+    content => $limits,
+  }
+  ~> Class['mongodb::service']
+}
+
+class mongodb::config_configure_limits_mongo {
   $limits = @(CONF)
     mongod soft nproc -1
     mongod hard nproc -1
