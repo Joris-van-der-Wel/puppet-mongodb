@@ -245,8 +245,10 @@ class mongodb::config_disable_huge_pages {
 
 class mongodb::config_configure_limits {
   $limits = @(CONF)
-    mongod soft nproc unlimited
-    mongod hard nproc unlimited
+    mongod soft nproc -1
+    mongod hard nproc -1
+    mongod soft nofile -1
+    mongod hard nofile 65535
     | CONF
 
   file { '/etc/security/limits.d/mongod.conf':
